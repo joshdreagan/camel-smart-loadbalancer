@@ -27,58 +27,59 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
+import org.apache.camel.Service;
 
-public class JMXMonitoringLoadBalancer extends QueueLoadBalancer {
-  
+public class MonitoringLoadBalancer extends QueueLoadBalancer {
+
   private List<ObservableMonitor> monitors = new ArrayList<>();
   private Comparator<Object> valueComparator = new DefaultComparator<>();
-  
+
   private final Map<Processor, ObservableMonitor> processorToMonitorMap = new HashMap<>();
-  
+
   private ScheduledExecutorService scheduler;
   private long schedulerDelay = 0L;
   private long schedulerPeriod = 5000L;
-  
+
   private final AtomicBoolean needSort = new AtomicBoolean(false);
-  
+
   public List<ObservableMonitor> getMonitors() {
     return monitors;
   }
-  
+
   public void setMonitors(List<ObservableMonitor> monitors) {
     this.monitors = Objects.requireNonNull(monitors, "The monitors parameter must not be null.");
   }
-  
+
   public long getSchedulerDelay() {
     return schedulerDelay;
   }
-  
+
   public void setSchedulerDelay(long schedulerDelay) {
     if (schedulerDelay < 0) {
       throw new IllegalArgumentException("The schedulerDelay parameter must be >= 0.");
     }
     this.schedulerDelay = schedulerDelay;
   }
-  
+
   public long getSchedulerPeriod() {
     return schedulerPeriod;
   }
-  
+
   public void setSchedulerPeriod(long schedulerPeriod) {
     if (schedulerPeriod <= 0) {
       throw new IllegalArgumentException("The schedulerPeriod parameter must be > 0.");
     }
     this.schedulerPeriod = schedulerPeriod;
   }
-  
+
   public Comparator<Object> getValueComparator() {
     return valueComparator;
   }
-  
+
   public void setValueComparator(Comparator<Object> valueComparator) {
     this.valueComparator = Objects.requireNonNull(valueComparator, "The valueComparator parameter must not be null.");
   }
-  
+
   @Override
   protected void doStart() throws Exception {
     int processorsSize = (getProcessors() == null) ? 0 : getProcessors().size();
@@ -92,11 +93,14 @@ public class JMXMonitoringLoadBalancer extends QueueLoadBalancer {
           }
         });
         processorToMonitorMap.put(getProcessors().get(i), monitors.get(i));
+        if (monitors.get(i) instanceof Service) {
+          ((Service) monitors.get(i)).start();
+        }
       }
     } else {
       throw new IllegalArgumentException(String.format("Processor list size [%s] must match monitor list size [%s].", processorsSize, monitorsSize));
     }
-    
+
     if (scheduler == null || scheduler.isShutdown()) {
       scheduler = Executors.newSingleThreadScheduledExecutor();
     }
@@ -119,19 +123,31 @@ public class JMXMonitoringLoadBalancer extends QueueLoadBalancer {
         }
       }
     }, schedulerDelay, schedulerPeriod, TimeUnit.MILLISECONDS);
-    
+
     super.doStart();
   }
-  
+
   @Override
   protected void doStop() throws Exception {
     if (scheduler != null && !scheduler.isShutdown()) {
       scheduler.shutdownNow();
     }
-    
+
+    if (monitors != null) {
+      for (int i = 0; i < monitors.size(); ++i) {
+        try {
+          if (monitors.get(i) instanceof Service) {
+            ((Service) monitors.get(i)).stop();
+          }
+        } catch (Exception e) {
+          log.warn(String.format("Unable to stop monitor [%s].", i), (log.isDebugEnabled()) ? e : null);
+        }
+      }
+    }
+
     super.doStop();
   }
-  
+
   @Override
   protected Processor chooseProcessor(List<Processor> processors, Exchange exchange) {
     return (processors != null && processors.size() > 0) ? processors.get(0) : null;
