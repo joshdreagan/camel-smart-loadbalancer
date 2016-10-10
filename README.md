@@ -52,4 +52,4 @@ Testing
 
 Using any REST client, send a GET HTTP request to http://localhost:9000/gateway/GreeterService.
 
-_Note: The current configuration polls the `ProcessCpuLoad` attribute. For a real test, you'll want to modify the `applicationContext.xml` to make the monitors poll the `SystemCpuLoad` attribute instead. Also, you'll want to run the backend instances on separate machines. If you do so, don't forget to update the hosts and ports as well.
+_Note: The current configuration polls the `ProcessCpuLoad` attribute. For a real test, you'll want to modify the `applicationContext.xml` to make the monitors poll the `SystemCpuLoad` attribute instead. Also, you'll want to run the backend instances on separate machines. If you do so, don't forget to update the hosts and ports as well._
